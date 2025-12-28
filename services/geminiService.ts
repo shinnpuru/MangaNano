@@ -1,15 +1,19 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+/**
+ * Translates a manga image using Gemini 3 Pro Image.
+ * The API key is obtained from process.env.API_KEY which is managed via the aistudio selection flow.
+ */
 export const translateMangaImage = async (
   base64Data: string,
   mimeType: string,
   targetLanguage: string
 ): Promise<string> => {
-  // Always create a new instance to ensure we use the latest injected API key
+  // Create a new instance right before the call to ensure the latest selected key is used.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Custom prompt for Chinese as requested, otherwise standard English prompt
+  // Custom prompt for Chinese as requested, otherwise a descriptive English prompt.
   let prompt = `Translate all text in this manga page to ${targetLanguage}. 
   Keep the original artwork, character designs, and background exactly the same. 
   Replace the text inside the speech bubbles, captions, and SFX with natural ${targetLanguage} translation. 
@@ -17,6 +21,7 @@ export const translateMangaImage = async (
   Return only the updated image.`;
 
   if (targetLanguage === "Chinese" || targetLanguage === "中文") {
+    // Exact prompt requested by user for Chinese translation.
     prompt = "把图中的日文翻译为中文，不要改变其他内容以及字体。";
   }
 
@@ -38,8 +43,8 @@ export const translateMangaImage = async (
       },
       config: {
         imageConfig: {
-          aspectRatio: "3:4", // Typical manga page ratio
-          imageSize: "1K"
+          aspectRatio: "3:4", // Standard manga page ratio.
+          imageSize: "1K"     // High quality 1K resolution.
         }
       }
     });
@@ -48,7 +53,7 @@ export const translateMangaImage = async (
       throw new Error("No response generated from the model.");
     }
 
-    // Iterate through all parts to find the image part
+    // Iterate through parts to find the image part as per SDK usage rules.
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) {
         return `data:${mimeType};base64,${part.inlineData.data}`;
@@ -58,7 +63,7 @@ export const translateMangaImage = async (
     throw new Error("The model did not return an image part.");
   } catch (error: any) {
     console.error("Gemini Translation Error:", error);
-    // Handle the specific error for "Requested entity was not found" which usually means API key issues
+    // If the error indicates an invalid or missing key, we report it so the UI can reset the selection.
     if (error.message?.includes("Requested entity was not found")) {
       throw new Error("API_KEY_ERROR");
     }
@@ -66,6 +71,9 @@ export const translateMangaImage = async (
   }
 };
 
+/**
+ * Utility to convert File objects to base64 strings.
+ */
 export const fileToBase64 = (file: File): Promise<{ data: string; mimeType: string }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
