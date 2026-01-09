@@ -11,6 +11,35 @@ export const translateMangaImage = async (
 ): Promise<string> => {
   // Use the provided apiKey from the UI/localStorage
   const ai = new GoogleGenAI({ apiKey });
+
+  // Step 1: Recognize and translate text (pre-processing using Gemini 3 Flash Preview)
+  let detectedText = "";
+  try {
+    const ocrResponse = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "Original -> Translation"`,
+          },
+        ],
+      },
+    });
+
+    if (ocrResponse.candidates?.[0]?.content?.parts) {
+      for (const part of ocrResponse.candidates[0].content.parts) {
+        if (part.text) detectedText += part.text;
+      }
+    }
+  } catch (ocrError) {
+    console.warn("OCR/Translation step failed, proceeding with direct generation.", ocrError);
+  }
   
   // Custom prompt for Chinese as requested, otherwise a descriptive English prompt.
   let prompt = `Translate all text in this manga page to ${targetLanguage}. 
@@ -19,9 +48,16 @@ export const translateMangaImage = async (
   Maintain the typography style and font feel of the original manga. 
   Return only the updated image.`;
 
+  if (detectedText) {
+    prompt += `\n\nReference Translations:\n${detectedText}`;
+  }
+
   // Specific prompt requested for Chinese target
   if (targetLanguage === "Chinese" || targetLanguage === "中文") {
     prompt = "把图中的日文翻译为中文，不要改变其他内容以及字体。";
+    if (detectedText) {
+      prompt += `\n\n参考译文:\n${detectedText}`;
+    }
   }
 
   try {
