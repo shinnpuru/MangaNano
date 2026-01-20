@@ -38,7 +38,11 @@ const TRANSLATIONS = {
     failed: "翻译失败",
     uiLang: "界面语言",
     total: "总计",
-    keyNotSet: "需要 API 密钥"
+    keyNotSet: "需要 API 密钥",
+    followTitle: "关注昕蒲",
+    followDesc: "获取更多漫画翻译灵感与工具更新",
+    bilibili: "Bilibili",
+    github: "GitHub"
   },
   en: {
     title: "MangaNano Translator",
@@ -64,7 +68,11 @@ const TRANSLATIONS = {
     failed: "Translation Failed",
     uiLang: "UI Language",
     total: "Total",
-    keyNotSet: "API Key Required"
+    keyNotSet: "API Key Required",
+    followTitle: "Follow Xinpu",
+    followDesc: "More manga translation ideas and updates",
+    bilibili: "Bilibili",
+    github: "GitHub"
   }
 };
 
@@ -468,6 +476,33 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
+
+      <footer className="bg-slate-900 text-white mt-16">
+        <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div>
+            <p className="text-xl font-black tracking-tight">{t.followTitle}</p>
+            <p className="text-sm text-white/60 font-medium mt-1">{t.followDesc}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://space.bilibili.com/36464441"
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-3 rounded-2xl bg-white text-slate-900 font-black text-sm shadow-lg hover:translate-y-[-2px] transition-transform"
+            >
+              {t.bilibili}
+            </a>
+            <a
+              href="https://github.com/shinnpuru"
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-3 rounded-2xl border border-white/30 text-white font-black text-sm hover:bg-white hover:text-slate-900 transition-colors"
+            >
+              {t.github}
+            </a>
+          </div>
+        </div>
+      </footer>
 
       {editingId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
