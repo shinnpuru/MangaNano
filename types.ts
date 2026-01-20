@@ -4,6 +4,7 @@ export interface MangaImage {
   file: File;
   previewUrl: string;
   translatedUrl?: string;
+  ocrText?: string;
   status: 'idle' | 'processing' | 'completed' | 'error';
   error?: string;
 }

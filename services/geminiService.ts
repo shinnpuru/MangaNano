@@ -8,7 +8,7 @@ export const translateMangaImage = async (
   mimeType: string,
   targetLanguage: string,
   apiKey: string
-): Promise<string> => {
+): Promise<{ imageUrl: string; ocrText: string }> => {
   // Use the provided apiKey from the UI/localStorage
   const ai = new GoogleGenAI({ apiKey });
 
@@ -26,7 +26,7 @@ export const translateMangaImage = async (
             },
           },
           {
-            text: `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "Original -> Translation"`,
+            text: `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"`,
           },
         ],
       },
@@ -91,7 +91,7 @@ export const translateMangaImage = async (
     // Iterate through parts to find the image part
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) {
-        return `data:${mimeType};base64,${part.inlineData.data}`;
+        return { imageUrl: `data:${mimeType};base64,${part.inlineData.data}`, ocrText: detectedText };
       }
     }
 
@@ -103,6 +103,79 @@ export const translateMangaImage = async (
       throw new Error("API_KEY_ERROR");
     }
     throw new Error(error.message || "Failed to translate image.");
+  }
+};
+
+/**
+ * Regenerate a translated image using user-edited OCR/reference text.
+ */
+export const regenerateMangaImage = async (
+  base64Data: string,
+  mimeType: string,
+  targetLanguage: string,
+  apiKey: string,
+  referenceText: string
+): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey });
+
+  let prompt = `Translate all text in this manga page to ${targetLanguage}.
+  Keep the original artwork, character designs, and background exactly the same.
+  Replace the text inside the speech bubbles, captions, and SFX with natural ${targetLanguage} translation.
+  Maintain the typography style and font feel of the original manga.
+  Return only the updated image.`;
+
+  if (referenceText) {
+    prompt += `\n\nReference Translations:\n${referenceText}`;
+  }
+
+  if (targetLanguage === "Chinese" || targetLanguage === "中文") {
+    prompt = "把图中的日文翻译为中文，不要改变其他内容以及字体。";
+    if (referenceText) {
+      prompt += `\n\n参考译文:\n${referenceText}`;
+    }
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "3:4",
+          imageSize: "1K",
+        },
+      },
+    });
+
+    if (!response.candidates || response.candidates.length === 0) {
+      throw new Error("No response generated from the model.");
+    }
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return `data:${mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+
+    throw new Error("The model did not return an image part.");
+  } catch (error: any) {
+    console.error("Gemini Regeneration Error:", error);
+    if (error.message?.includes("Requested entity was not found")) {
+      throw new Error("API_KEY_ERROR");
+    }
+    throw new Error(error.message || "Failed to regenerate image.");
   }
 };
 

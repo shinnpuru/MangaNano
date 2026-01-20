@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MangaImage, UILanguage } from './types';
-import { translateMangaImage, fileToBase64 } from './services/geminiService';
+import { translateMangaImage, regenerateMangaImage, fileToBase64 } from './services/geminiService';
 
 declare const JSZip: any;
 declare const window: any;
 
-const LANGUAGES = ["Chinese", "English", "Spanish", "French", "Japanese"];
+const LANGUAGE_OPTIONS: { value: string; labels: Record<UILanguage, string> }[] = [
+  { value: "Chinese", labels: { en: "Chinese", zh: "中文" } },
+  { value: "English", labels: { en: "English", zh: "英语" } },
+  { value: "Spanish", labels: { en: "Spanish", zh: "西班牙语" } },
+  { value: "French", labels: { en: "French", zh: "法语" } },
+  { value: "Japanese", labels: { en: "Japanese", zh: "日语" } }
+];
 
 const TRANSLATIONS = {
   zh: {
@@ -69,6 +75,9 @@ const App: React.FC = () => {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [apiKey, setApiKey] = useState<string>(localStorage.getItem('gemini_api_key') || '');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>("");
+  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
 
   const t = TRANSLATIONS[uiLang];
 
@@ -140,10 +149,10 @@ const App: React.FC = () => {
 
       try {
         const { data, mimeType } = await fileToBase64(img.file);
-        const resultUrl = await translateMangaImage(data, mimeType, targetLanguage, apiKey);
-        
+        const { imageUrl, ocrText } = await translateMangaImage(data, mimeType, targetLanguage, apiKey);
+
         setImages(prev => prev.map(item => 
-          item.id === img.id ? { ...item, status: 'completed', translatedUrl: resultUrl } : item
+          item.id === img.id ? { ...item, status: 'completed', translatedUrl: imageUrl, ocrText } : item
         ));
       } catch (error: any) {
         if (error.message === "API_KEY_ERROR") {
@@ -274,8 +283,8 @@ const App: React.FC = () => {
                     disabled={isProcessing}
                     className="w-full pl-6 pr-12 py-5 bg-slate-50 border border-slate-200 rounded-[24px] focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-black text-slate-700 appearance-none disabled:opacity-50 text-lg"
                   >
-                    {LANGUAGES.map(lang => (
-                      <option key={lang} value={lang}>{lang}</option>
+                    {LANGUAGE_OPTIONS.map(lang => (
+                      <option key={lang.value} value={lang.value}>{lang.labels[uiLang]}</option>
                     ))}
                   </select>
                   <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
@@ -422,11 +431,20 @@ const App: React.FC = () => {
                           <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">{(img.file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                         {!isProcessing && img.status !== 'processing' && (
-                          <button onClick={() => removeImage(img.id)} className="w-12 h-12 bg-white/10 hover:bg-red-500 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-3">
+                            {img.status === 'completed' && (
+                              <button onClick={() => { setEditingId(img.id); setEditingText(img.ocrText || ""); }} className="w-12 h-12 bg-white/10 hover:bg-indigo-600 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M11 5h2m-8 8l10-10a2.828 2.828 0 114 4L9 17H5v-4z" />
+                                </svg>
+                              </button>
+                            )}
+                            <button onClick={() => removeImage(img.id)} className="w-12 h-12 bg-white/10 hover:bg-red-500 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -450,6 +468,65 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {editingId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/70" onClick={() => !isRegenerating && setEditingId(null)}></div>
+          <div className="relative bg-white w-full max-w-3xl rounded-[32px] shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-xl font-black tracking-tight">{uiLang === 'zh' ? '编辑识别文本并重新生成' : 'Edit OCR Text & Regenerate'}</h3>
+              <button disabled={isRegenerating} onClick={() => setEditingId(null)} className="w-10 h-10 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <textarea
+                className="w-full min-h-[260px] p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 font-mono text-sm"
+                placeholder={uiLang === 'zh' ? '在此编辑 OCR/参考译文（例如：[位置] 原文 -> 译文）' : 'Edit OCR/reference lines here (e.g., [Position] Original -> Translation)'}
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                disabled={isRegenerating}
+              />
+              <p className="text-xs text-slate-500">{uiLang === 'zh' ? '提示：格式不限，模型会参考这里的文本进行替换。' : 'Tip: Format is flexible; the model will use this as reference.'}</p>
+            </div>
+            <div className="p-6 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setEditingId(null)}
+                disabled={isRegenerating}
+                className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black disabled:opacity-50"
+              >{uiLang === 'zh' ? '取消' : 'Cancel'}</button>
+              <button
+                onClick={async () => {
+                  if (!editingId) return;
+                  setIsRegenerating(true);
+                  try {
+                    const img = images.find(i => i.id === editingId);
+                    if (!img) return;
+                    setImages(prev => prev.map(it => it.id === editingId ? { ...it, status: 'processing' } : it));
+                    const { data, mimeType } = await fileToBase64(img.file);
+                    const newUrl = await regenerateMangaImage(data, mimeType, targetLanguage, apiKey, editingText || '');
+                    setImages(prev => prev.map(it => it.id === editingId ? { ...it, status: 'completed', translatedUrl: newUrl, ocrText: editingText || it.ocrText } : it));
+                    setEditingId(null);
+                  } catch (error: any) {
+                    if (error.message === 'API_KEY_ERROR') {
+                      setHasKey(false);
+                      setEditingId(null);
+                    } else {
+                      setImages(prev => prev.map(it => it.id === editingId ? { ...it, status: 'error', error: error.message } : it));
+                    }
+                  } finally {
+                    setIsRegenerating(false);
+                  }
+                }}
+                className={`px-6 py-3 rounded-2xl font-black text-white transition-all ${isRegenerating ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'} flex items-center gap-2`}
+              >
+                {isRegenerating && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>}
+                <span>{isRegenerating ? (uiLang === 'zh' ? '重新生成中…' : 'Regenerating…') : (uiLang === 'zh' ? '重新生成' : 'Regenerate')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
