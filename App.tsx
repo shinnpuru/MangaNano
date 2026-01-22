@@ -42,7 +42,10 @@ const TRANSLATIONS = {
     followTitle: "关注昕蒲",
     followDesc: "获取更多漫画翻译灵感与工具更新",
     bilibili: "Bilibili",
-    github: "GitHub"
+    github: "GitHub",
+    promptTitle: "全局提示（可选）",
+    promptDesc: "提供人设、世界观或专有名词，模型会在识别与翻译时参考。",
+    promptPlaceholder: "请填入内容。"
   },
   en: {
     title: "MangaNano Translator",
@@ -72,7 +75,10 @@ const TRANSLATIONS = {
     followTitle: "Follow Xinpu",
     followDesc: "More manga translation ideas and updates",
     bilibili: "Bilibili",
-    github: "GitHub"
+    github: "GitHub",
+    promptTitle: "Global Prompt (optional)",
+    promptDesc: "Share character notes, lore, or terminology; the model will use it during OCR and translation.",
+    promptPlaceholder: "Please enter content."
   }
 };
 
@@ -86,6 +92,8 @@ const App: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>("");
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
+  const [globalPrompt, setGlobalPrompt] = useState<string>(localStorage.getItem('manganano_global_prompt') || '');
+  const [isPromptOpen, setIsPromptOpen] = useState(false);
 
   const t = TRANSLATIONS[uiLang];
 
@@ -104,6 +112,10 @@ const App: React.FC = () => {
     };
     checkKey();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('manganano_global_prompt', globalPrompt);
+  }, [globalPrompt]);
 
   const handleSaveKey = () => {
     if (apiKey.trim()) {
@@ -342,6 +354,36 @@ const App: React.FC = () => {
                   >
                     {t.clearAll}
                   </button>
+                )}
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 space-y-4">
+                <button
+                  onClick={() => setIsPromptOpen(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-[18px] transition-colors text-left"
+                >
+                  <div>
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">{t.promptTitle}</p>
+                  </div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-5 w-5 text-slate-500 transition-transform ${isPromptOpen ? 'rotate-180' : ''}`}
+                    viewBox="0 0 20 20" fill="currentColor"
+                  >
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                  </svg>
+                </button>
+
+                {isPromptOpen && (
+                  <div className="space-y-3 animate-in fade-in duration-200">
+                    <textarea
+                      value={globalPrompt}
+                      onChange={(e) => setGlobalPrompt(e.target.value)}
+                      placeholder={t.promptPlaceholder}
+                      className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 text-sm text-slate-800"
+                    />
+                    <p className="text-xs text-slate-500 leading-relaxed">{t.promptDesc}</p>
+                  </div>
                 )}
               </div>
             </div>

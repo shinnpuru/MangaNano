@@ -7,14 +7,18 @@ export const translateMangaImage = async (
   base64Data: string,
   mimeType: string,
   targetLanguage: string,
-  apiKey: string
+  apiKey: string,
+  globalPrompt?: string
 ): Promise<{ imageUrl: string; ocrText: string }> => {
   // Use the provided apiKey from the UI/localStorage
   const ai = new GoogleGenAI({ apiKey });
 
+  const promptContext = globalPrompt?.trim();
+
   // Step 1: Recognize and translate text (pre-processing using Gemini 3 Flash Preview)
   let detectedText = "";
   try {
+    const ocrTextPrompt = `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"${promptContext ? `\n\nContext you can rely on:\n${promptContext}` : ''}`;
     const ocrResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -26,7 +30,7 @@ export const translateMangaImage = async (
             },
           },
           {
-            text: `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"`,
+            text: ocrTextPrompt,
           },
         ],
       },
