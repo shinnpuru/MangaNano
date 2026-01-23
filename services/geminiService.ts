@@ -18,7 +18,10 @@ export const translateMangaImage = async (
   // Step 1: Recognize and translate text (pre-processing using Gemini 3 Flash Preview)
   let detectedText = "";
   try {
-    const ocrTextPrompt = `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"${promptContext ? `\n\nContext you can rely on:\n${promptContext}` : ''}`;
+    const ocrTextPrompt =
+      targetLanguage === "Chinese" || targetLanguage === "中文"
+        ? `识别这页漫画中的日文文本，并翻译成中文。输出格式：[位置] 原文 -> 译文${promptContext ? `\n\n可参考的上下文：\n${promptContext}` : ''}`
+        : `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"${promptContext ? `\n\nContext you can rely on:\n${promptContext}` : ''}`;
     const ocrResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
