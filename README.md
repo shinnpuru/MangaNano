@@ -1,6 +1,10 @@
 # MangaNano — Gemini 3 Image Translator
 Batch-translate manga pages in the browser. Drag in pages, pick a target language, and let Gemini 3 handle recognition and inpainting. UI supports English/Chinese.
 
+## Usage
+
+Just open https://manga.shinnpuru.online/ and fill your Google API Key.
+
 ## Features
 - Batch upload with drag-and-drop, live per-page status, and bulk clear
 - Target languages: Chinese, English, Spanish, French, Japanese
@@ -9,6 +13,18 @@ Batch-translate manga pages in the browser. Drag in pages, pick a target languag
 - Download all translated pages as a ZIP
 - Error surfacing and recovery per page
 
+## Tips
+- If you see "API_KEY_ERROR", re-enter a valid key with the required model access.
+- Finished pages stay cached in memory; use **Clear All** to reset the queue.
+- You can switch UI language anytime via the EN/ZH toggle.
+
+## Notes
+- All processing happens client-side using the Gemini API; your key is stored only in the browser.
+- Image outputs keep the original aspect ratio with a 3:4 config and 1K size as defined in the generation call.
+
+<details>
+<summary>Developer Notes</summary>
+  
 ## How it works
 1) **Recognize + translate text:** `gemini-3-flash-preview` extracts text and provides reference translations.
 2) **Inpaint the page:** `gemini-3-pro-image-preview` applies translations back into the page, preserving artwork and typography. Chinese uses a specialized prompt.
@@ -25,16 +41,12 @@ Batch-translate manga pages in the browser. Drag in pages, pick a target languag
 5) Choose a target language and hit **Start Batch Translation**.
 6) When done, **Download ZIP** to grab all translated pages.
 
-## Tips
-- If you see "API_KEY_ERROR", re-enter a valid key with the required model access.
-- Finished pages stay cached in memory; use **Clear All** to reset the queue.
-- You can switch UI language anytime via the EN/ZH toggle.
-
 ## Scripts
 - `npm run dev` — start the Vite dev server
 - `npm run build` — production build
 - `npm run preview` — preview the production build
+</details>
 
-## Notes
-- All processing happens client-side using the Gemini API; your key is stored only in the browser.
-- Image outputs keep the original aspect ratio with a 3:4 config and 1K size as defined in the generation call.
+## License
+
+MIT
