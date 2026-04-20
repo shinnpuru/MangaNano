@@ -94,6 +94,8 @@ const App: React.FC = () => {
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
   const [globalPrompt, setGlobalPrompt] = useState<string>(localStorage.getItem('manganano_global_prompt') || '');
   const [isPromptOpen, setIsPromptOpen] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<'translated' | 'original'>('translated');
 
   const t = TRANSLATIONS[uiLang];
 
@@ -217,6 +219,8 @@ const App: React.FC = () => {
     const errors = images.filter(i => i.status === 'error').length;
     return { total, completed, errors };
   }, [images]);
+
+  const previewingImage = useMemo(() => images.find(i => i.id === previewId) || null, [images, previewId]);
 
   // key prompt dialog ui
   if (hasKey === false) {
@@ -440,7 +444,13 @@ const App: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
                 {images.map((img) => (
                   <div key={img.id} className="bg-white rounded-[48px] border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-3 transition-all group relative border-b-[10px] border-slate-100">
-                    <div className="aspect-[3/4] bg-slate-50 relative overflow-hidden">
+                    <div
+                      className="aspect-[3/4] bg-slate-50 relative overflow-hidden cursor-zoom-in"
+                      onClick={() => {
+                        setPreviewId(img.id);
+                        setPreviewMode(img.translatedUrl ? 'translated' : 'original');
+                      }}
+                    >
                       <img 
                         src={img.translatedUrl || img.previewUrl} 
                         alt={img.file.name} 
@@ -470,7 +480,13 @@ const App: React.FC = () => {
                             </svg>
                           </div>
                           <p className="text-red-900 text-base font-black leading-tight tracking-tight uppercase mb-8">{img.error || t.failed}</p>
-                          <button onClick={() => removeImage(img.id)} className="px-8 py-4 bg-white text-red-600 rounded-2xl text-[11px] font-black shadow-xl border border-red-100 active:scale-95 transition-all uppercase tracking-widest">REMOVE</button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeImage(img.id);
+                            }}
+                            className="px-8 py-4 bg-white text-red-600 rounded-2xl text-[11px] font-black shadow-xl border border-red-100 active:scale-95 transition-all uppercase tracking-widest"
+                          >REMOVE</button>
                         </div>
                       )}
 
@@ -483,13 +499,26 @@ const App: React.FC = () => {
                         {!isProcessing && img.status !== 'processing' && (
                           <div className="flex items-center gap-3">
                             {img.status === 'completed' && (
-                              <button onClick={() => { setEditingId(img.id); setEditingText(img.ocrText || ""); }} className="w-12 h-12 bg-white/10 hover:bg-indigo-600 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingId(img.id);
+                                  setEditingText(img.ocrText || "");
+                                }}
+                                className="w-12 h-12 bg-white/10 hover:bg-indigo-600 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5"
+                              >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M11 5h2m-8 8l10-10a2.828 2.828 0 114 4L9 17H5v-4z" />
                                 </svg>
                               </button>
                             )}
-                            <button onClick={() => removeImage(img.id)} className="w-12 h-12 bg-white/10 hover:bg-red-500 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeImage(img.id);
+                              }}
+                              className="w-12 h-12 bg-white/10 hover:bg-red-500 text-white rounded-[18px] transition-all backdrop-blur-2xl flex items-center justify-center border border-white/5"
+                            >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
@@ -545,6 +574,46 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {previewingImage && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur" onClick={() => setPreviewId(null)}></div>
+          <div className="relative bg-white/95 w-full max-w-6xl rounded-[32px] shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div className="space-y-1">
+                <p className="text-lg font-black text-slate-900 truncate max-w-[420px]">{previewingImage.file.name}</p>
+                <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">{previewMode === 'translated' ? (uiLang === 'zh' ? '翻译后' : 'Translated') : (uiLang === 'zh' ? '原图' : 'Original')}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPreviewMode('original')}
+                  disabled={previewMode === 'original'}
+                  className={`px-4 py-2 rounded-xl text-sm font-black border ${previewMode === 'original' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                >{uiLang === 'zh' ? '原图' : 'Original'}</button>
+                <button
+                  onClick={() => setPreviewMode('translated')}
+                  disabled={!previewingImage.translatedUrl || previewMode === 'translated'}
+                  className={`px-4 py-2 rounded-xl text-sm font-black border ${previewMode === 'translated' ? 'bg-indigo-600 text-white border-indigo-600' : previewingImage.translatedUrl ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
+                >{uiLang === 'zh' ? '译图' : 'Translated'}</button>
+                <button onClick={() => setPreviewId(null)} className="w-10 h-10 rounded-xl hover:bg-slate-100 text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                </button>
+              </div>
+            </div>
+            <div className="bg-slate-900 p-6 flex items-center justify-center">
+              {((previewMode === 'translated' && previewingImage.translatedUrl) || previewMode === 'original') ? (
+                <img
+                  src={previewMode === 'translated' && previewingImage.translatedUrl ? previewingImage.translatedUrl : previewingImage.previewUrl}
+                  alt={previewingImage.file.name}
+                  className="max-h-[80vh] w-auto rounded-2xl shadow-2xl border border-slate-800 object-contain"
+                />
+              ) : (
+                <p className="text-white/70 text-sm font-medium">{uiLang === 'zh' ? '还没有生成译图' : 'Translated image not available yet.'}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
