@@ -45,7 +45,9 @@ const TRANSLATIONS = {
     github: "GitHub",
     promptTitle: "全局提示（可选）",
     promptDesc: "提供人设、世界观或专有名词，模型会在识别与翻译时参考。",
-    promptPlaceholder: "请填入内容。"
+    promptPlaceholder: "请填入内容。",
+    threadCount: "线程数",
+    threadDesc: "同时翻译的图片数量"
   },
   en: {
     title: "MangaNano Translator",
@@ -78,7 +80,9 @@ const TRANSLATIONS = {
     github: "GitHub",
     promptTitle: "Global Prompt (optional)",
     promptDesc: "Share character notes, lore, or terminology; the model will use it during OCR and translation.",
-    promptPlaceholder: "Please enter content."
+    promptPlaceholder: "Please enter content.",
+    threadCount: "Threads",
+    threadDesc: "Number of images to translate simultaneously"
   }
 };
 
@@ -96,6 +100,7 @@ const App: React.FC = () => {
   const [isPromptOpen, setIsPromptOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<'translated' | 'original'>('translated');
+  const [threadCount, setThreadCount] = useState<number>(Number(localStorage.getItem('manganano_thread_count')) || 8);
 
   const t = TRANSLATIONS[uiLang];
 
@@ -161,11 +166,15 @@ const App: React.FC = () => {
     if (images.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
-      if (img.status === 'completed') continue;
+    const pendingImages = images.filter(img => img.status !== 'completed');
+    const queue = [...pendingImages];
+    const activePromises: Promise<void>[] = [];
 
-      setImages(prev => prev.map(item => 
+    const processNext = async (): Promise<void> => {
+      const img = queue.shift();
+      if (!img) return;
+
+      setImages(prev => prev.map(item =>
         item.id === img.id ? { ...item, status: 'processing' } : item
       ));
 
@@ -173,7 +182,7 @@ const App: React.FC = () => {
         const { data, mimeType } = await fileToBase64(img.file);
         const { imageUrl, ocrText } = await translateMangaImage(data, mimeType, targetLanguage, apiKey);
 
-        setImages(prev => prev.map(item => 
+        setImages(prev => prev.map(item =>
           item.id === img.id ? { ...item, status: 'completed', translatedUrl: imageUrl, ocrText } : item
         ));
       } catch (error: any) {
@@ -182,12 +191,19 @@ const App: React.FC = () => {
           setIsProcessing(false);
           return;
         }
-        setImages(prev => prev.map(item => 
+        setImages(prev => prev.map(item =>
           item.id === img.id ? { ...item, status: 'error', error: error.message } : item
         ));
       }
-    }
 
+      return processNext();
+    };
+
+    const workers = Array(Math.min(threadCount, pendingImages.length))
+      .fill(null)
+      .map(() => processNext());
+
+    await Promise.all(workers);
     setIsProcessing(false);
   };
 
@@ -301,7 +317,7 @@ const App: React.FC = () => {
               <div className="space-y-5">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] pl-1">{t.targetLang}</label>
                 <div className="relative group">
-                  <select 
+                  <select
                     value={targetLanguage}
                     onChange={(e) => setTargetLanguage(e.target.value)}
                     disabled={isProcessing}
@@ -317,6 +333,32 @@ const App: React.FC = () => {
                     </svg>
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-5">
+                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] pl-1">{t.threadCount}</label>
+                <div className="relative group">
+                  <select
+                    value={threadCount}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setThreadCount(value);
+                      localStorage.setItem('manganano_thread_count', String(value));
+                    }}
+                    disabled={isProcessing}
+                    className="w-full pl-6 pr-12 py-5 bg-slate-50 border border-slate-200 rounded-[24px] focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-black text-slate-700 appearance-none disabled:opacity-50 text-lg"
+                  >
+                    {[1, 2, 4, 6, 8, 10, 12, 16].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed pl-1">{t.threadDesc}</p>
               </div>
 
               <div className="space-y-5 pt-4 border-t border-slate-100">
