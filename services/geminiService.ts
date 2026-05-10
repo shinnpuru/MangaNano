@@ -1,5 +1,49 @@
 import { GoogleGenAI } from "@google/genai";
 
+type LanguageKey = "Chinese" | "English" | "Spanish" | "French" | "Japanese";
+
+// Language-specific prompt configurations
+const PROMPT_CONFIG: Record<LanguageKey, {
+  ocr: (context: string) => string;
+  generate: string;
+  referencePrefix: string;
+}> = {
+  Chinese: {
+    ocr: (context: string) =>
+      `识别这页漫画中的日文文本，并翻译成中文。输出格式：[位置] 原文 -> 译文${context ? `\n\n可参考的上下文：\n${context}` : ''}`,
+    generate: "把图中的日文翻译为中文，不要改变其他内容以及字体。",
+    referencePrefix: "参考译文:",
+  },
+  English: {
+    ocr: (context: string) =>
+      `Identify all Japanese text in this manga page and translate it to English. Format: "[Position] Original -> Translation"${context ? `\n\nContext to consider:\n${context}` : ''}`,
+    generate: "Translate all Japanese text in this image to English. Do not change anything else or the font style.",
+    referencePrefix: "Reference translations:",
+  },
+  Spanish: {
+    ocr: (context: string) =>
+      `Identifica todo el texto japonés en esta página de manga y tradúcelo al español. Formato: "[Posición] Original -> Traducción"${context ? `\n\nContexto a considerar:\n${context}` : ''}`,
+    generate: "Traduce todo el texto japonés de esta imagen al español. No cambies nada más ni el estilo de fuente.",
+    referencePrefix: "Traducciones de referencia:",
+  },
+  French: {
+    ocr: (context: string) =>
+      `Identifiez tout le texte japonais dans cette page de manga et traduisez-le en français. Format : "[Position] Original -> Traduction"${context ? `\n\nContexte à considérer :\n${context}` : ''}`,
+    generate: "Traduisez tout le texte japonais de cette image en français. Ne changez rien d'autre ni le style de police.",
+    referencePrefix: "Traductions de référence :",
+  },
+  Japanese: {
+    ocr: (context: string) =>
+      `この漫画のページにある英語または中国語のテキストを日本語に翻訳してください。フォーマット: "[位置] 原文 -> 訳文"${context ? `\n\n参考にできる文脈:\n${context}` : ''}`,
+    generate: "画像内の英語または中国語のテキストを日本語に翻訳してください。他の内容やフォントスタイルは変更しないでください。",
+    referencePrefix: "参考訳文:",
+  },
+};
+
+const getLanguageConfig = (targetLanguage: string) => {
+  return PROMPT_CONFIG[targetLanguage as LanguageKey] || PROMPT_CONFIG.English;
+};
+
 /**
  * Translates a manga image using Gemini 3 Pro Image (new nano banana).
  */
@@ -14,14 +58,12 @@ export const translateMangaImage = async (
   const ai = new GoogleGenAI({ apiKey });
 
   const promptContext = globalPrompt?.trim();
+  const langConfig = getLanguageConfig(targetLanguage);
 
   // Step 1: Recognize and translate text (pre-processing using Gemini 3 Flash Preview)
   let detectedText = "";
   try {
-    const ocrTextPrompt =
-      targetLanguage === "Chinese" || targetLanguage === "中文"
-        ? `识别这页漫画中的日文文本，并翻译成中文。输出格式：[位置] 原文 -> 译文${promptContext ? `\n\n可参考的上下文：\n${promptContext}` : ''}`
-        : `Identify all text in this manga page and provide the translation in ${targetLanguage}. Format: "[Position] Original -> Translation"${promptContext ? `\n\nContext you can rely on:\n${promptContext}` : ''}`;
+    const ocrTextPrompt = langConfig.ocr(promptContext || "");
     const ocrResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -47,24 +89,11 @@ export const translateMangaImage = async (
   } catch (ocrError) {
     console.warn("OCR/Translation step failed, proceeding with direct generation.", ocrError);
   }
-  
-  // Custom prompt for Chinese as requested, otherwise a descriptive English prompt.
-  let prompt = `Translate all text in this manga page to ${targetLanguage}. 
-  Keep the original artwork, character designs, and background exactly the same. 
-  Replace the text inside the speech bubbles, captions, and SFX with natural ${targetLanguage} translation. 
-  Maintain the typography style and font feel of the original manga. 
-  Return only the updated image.`;
 
+  // Build the generation prompt using language-specific config
+  let prompt = langConfig.generate;
   if (detectedText) {
-    prompt += `\n\nReference Translations:\n${detectedText}`;
-  }
-
-  // Specific prompt requested for Chinese target
-  if (targetLanguage === "Chinese" || targetLanguage === "中文") {
-    prompt = "把图中的日文翻译为中文，不要改变其他内容以及字体。";
-    if (detectedText) {
-      prompt += `\n\n参考译文:\n${detectedText}`;
-    }
+    prompt += `\n\n${langConfig.referencePrefix}\n${detectedText}`;
   }
 
   try {
@@ -125,21 +154,12 @@ export const regenerateMangaImage = async (
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
 
-  let prompt = `Translate all text in this manga page to ${targetLanguage}.
-  Keep the original artwork, character designs, and background exactly the same.
-  Replace the text inside the speech bubbles, captions, and SFX with natural ${targetLanguage} translation.
-  Maintain the typography style and font feel of the original manga.
-  Return only the updated image.`;
+  const langConfig = getLanguageConfig(targetLanguage);
 
+  // Build the generation prompt using language-specific config
+  let prompt = langConfig.generate;
   if (referenceText) {
-    prompt += `\n\nReference Translations:\n${referenceText}`;
-  }
-
-  if (targetLanguage === "Chinese" || targetLanguage === "中文") {
-    prompt = "把图中的日文翻译为中文，不要改变其他内容以及字体。";
-    if (referenceText) {
-      prompt += `\n\n参考译文:\n${referenceText}`;
-    }
+    prompt += `\n\n${langConfig.referencePrefix}\n${referenceText}`;
   }
 
   try {
